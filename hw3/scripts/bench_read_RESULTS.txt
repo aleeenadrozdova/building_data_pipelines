@@ -1,0 +1,5 @@
+format	full_scan	select	aggregate
+parquet	0.141	0.150	0.855
+avro	6.225	6.877	6.645
+csv	7.093	14.608	17.187
+json	25.892	28.687	33.515

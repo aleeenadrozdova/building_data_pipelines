@@ -1,0 +1,50 @@
+# WorkflowTemplate: проверка качества данных (таблицы/витрины) после обработки.
+# Частая задача: прогон правил качества (Soda/GE) и решение — «прошло/не прошло».
+#
+# Inputs.parameters:
+#   table     — какая таблица/витрина проверяется
+#   checks    — путь к файлу правил (checks.yaml)
+#   fail-on-error — true -> при провале шаг завершается ошибкой (fail-fast)
+#
+# Outputs:
+#   artifact.report  — отчёт проверки (HTML/JSON)
+#   parameters.quality-status — passed / failed
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: data-quality
+  labels:
+    retailflow: reusable
+spec:
+  templates:
+    - name: data-quality
+      inputs:
+        parameters:
+          - name: table
+          - name: checks
+            default: "/dq/checks/default.yaml"
+          - name: fail-on-error
+            default: "true"
+      outputs:
+        artifacts:
+          - name: report
+            path: /dq/report
+        parameters:
+          - name: quality-status
+            valueFrom:
+              path: /dq/status.txt
+      script:
+        image: retailflow/data-quality:1.2.0   # обёртка над Soda/Great Expectations
+        command: ["python"]
+        source: |
+          import os, subprocess, pathlib
+          table = "{{inputs.parameters.table}}"
+          checks = "{{inputs.parameters.checks}}"
+          # генерируем отчёт в /dq/report
+          rc = subprocess.run(["dq", "run", "--table", table, "--checks", checks,
+                               "--output-dir", "/dq/report"]).returncode
+          status = "passed" if rc == 0 else "failed"
+          pathlib.Path("/dq/status.txt").write_text(status)
+          # если fail-on-error=true — падаем на провале, чтобы пайплайн не шёл дальше
+          if status == "failed" and "{{inputs.parameters.fail-on-error}}" == "true":
+              raise SystemExit(1)

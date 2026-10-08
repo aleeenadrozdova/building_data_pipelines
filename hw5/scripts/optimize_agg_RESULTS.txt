@@ -1,0 +1,4 @@
+variant	time_s
+naive	1.075
+salted	1.128
+aqe_on	0.778

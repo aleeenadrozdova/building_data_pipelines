@@ -1,0 +1,34 @@
+# hw13 — Prometheus AlertingRules (примеры, соответствующие §4 решения).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: retailflow
+  labels:
+    prometheus: k8s
+    role: alert-rules
+spec:
+  groups:
+    - name: retailflow.app
+      rules:
+        - alert: ServiceDown
+          expr: up{namespace="prod"} == 0
+          for: 2m
+          labels: { severity: critical }
+          annotations:
+            summary: 'Сервис {{ $labels.app }} недоступен'
+        - alert: High5xxRate
+          expr: |
+            100 * sum(rate(retailflow_http_requests_total{status=~"5.."}[5m])) by (app)
+            / sum(rate(retailflow_http_requests_total[5m])) by (app) > 5
+          for: 2m
+          labels: { severity: warning }
+        - alert: PipelineStale
+          expr: retailflow_data_freshness_seconds{layer="gold"} > 3600
+          labels: { severity: warning }
+        - alert: SparkTaskFailures
+          expr: sum(increase(spark_stage_failed_tasks_total[10m])) by (job_name) > 0
+          labels: { severity: warning }
+        - alert: KafkaConsumerLag
+          expr: kafka_consumer_lag{consumer_group="group.ingest-fin"} > 100000
+          for: 5m
+          labels: { severity: critical }

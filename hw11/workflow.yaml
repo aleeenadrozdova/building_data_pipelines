@@ -1,0 +1,94 @@
+# Главный Workflow RetailFlow: собирает универсальные шаблоны в осмысленный пайплайн.
+#
+# nightly-retailflow-pipeline:
+#   1) spark-job    — из сырых событий (raw) строим silver-витрину за event-date
+#   2) data-quality — проверяем silver (правила качества); fail-on-error=true -> gate:
+#                     при провале пайплайн останавливается и срабатывает onError
+#   3) notify       — success-ветка: уведомление, если quality-status == passed
+#                     onExit (on-error): критичное уведомление при любой ошибке
+#
+# Вход: event-date (день), raw-root/{event-date} -> silver-root/{event-date}
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: retailflow-nightly-
+  labels:
+    retailflow: pipeline
+spec:
+  entrypoint: build-silver
+  arguments:
+    parameters:
+      - name: event-date
+        value: "2026-09-22"
+      - name: raw-root
+        value: "s3a://retailflow/raw/events"
+      - name: silver-root
+        value: "s3a://retailflow/silver"
+      - name: spark-app
+        value: "s3a://retailflow/jobs/build_silver.py"
+      - name: checks-file
+        value: "/dq/checks/silver.yaml"
+
+  templates:
+    # ---- главный шаг-скрипт: пайплайн в три шага ----
+    - name: build-silver
+      steps:
+        - - name: build-silver-table
+            templateRef:
+              name: spark-job
+              template: spark-job
+            arguments:
+              parameters:
+                - name: main-app-file
+                  value: "{{workflow.parameters.spark-app}}"
+                - name: input-path
+                  value: "{{workflow.parameters.raw-root}}/{{workflow.parameters.event-date}}"
+                - name: output-path
+                  value: "{{workflow.parameters.silver-root}}/{{workflow.parameters.event-date}}"
+                - name: application-name
+                  value: "silver-build"
+        - - name: quality-gate
+            templateRef:
+              name: data-quality
+              template: data-quality
+            arguments:
+              parameters:
+                - name: table
+                  value: "silver.events.{{workflow.parameters.event-date}}"
+                - name: checks
+                  value: "{{workflow.parameters.checks-file}}"
+                - name: fail-on-error
+                  value: "true"
+
+        # success-ветка: уведомить об успехе + опубликовать отчёт качества
+        - - name: notify-success
+            when: "{{steps.quality-gate.outputs.parameters.quality-status}} == passed"
+            templateRef:
+              name: notify
+              template: notify
+            arguments:
+              parameters:
+                - name: channel
+                  value: "telegram"
+                - name: message
+                  value: "✅ RetailFlow silver ready for {{workflow.parameters.event-date}}"
+                - name: severity
+                  value: "info"
+
+    # ---- fail-ветка (флаг: вызывается при ошибке) ----
+    - name: on-error
+      steps:
+        - - name: notify-failure
+            templateRef:
+              name: notify
+              template: notify
+            arguments:
+              parameters:
+                - name: channel
+                  value: "telegram"
+                - name: message
+                  value: "🚨 RetailFlow pipeline FAILED for {{workflow.parameters.event-date}}"
+                - name: severity
+                  value: "critical"
+
+  onExit: on-error

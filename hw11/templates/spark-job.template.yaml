@@ -1,0 +1,56 @@
+# WorkflowTemplate: запуск Spark-джобы (универсальный, переиспользуемый).
+# Решает частую задачу: выполнить PySpark-приложение с заданными путями входа/выхода.
+#
+# Входные параметры (inputs.parameters):
+#   main-app-file  — URI/путь к приложению (локальный файл в образе или s3a://)
+#   input-path     — входная локация (таблица/каталог/озеро)
+#   output-path    — выходная локация
+#   application-name — имя приложения (логи/метки)
+#   driver-memory / executor-memory — ресурсы (гибкость под объём данных)
+#
+# Выходные (outputs):
+#   parameters.job-status — код/статус завершения (пишется контейнером в файл)
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: spark-job
+  labels:
+    retailflow: reusable
+spec:
+  templates:
+    - name: spark-job
+      inputs:
+        parameters:
+          - name: main-app-file
+          - name: input-path
+          - name: output-path
+          - name: application-name
+            default: "retailflow-spark-job"
+          - name: driver-memory
+            default: "4g"
+          - name: executor-memory
+            default: "4g"
+      outputs:
+        parameters:
+          - name: job-status
+            valueFrom:
+              path: /tmp/job_status.txt
+      container:
+        image: retailflow/spark:3.5.0   # образ с установленным Spark и нашим кодом
+        command: ["/bin/bash", "-c"]
+        args:
+          - >
+            /opt/spark/bin/spark-submit \
+              --name "{{inputs.parameters.application-name}}" \
+              --driver-memory "{{inputs.parameters.driver-memory}}" \
+              --executor-memory "{{inputs.parameters.executor-memory}}" \
+              --conf spark.hadoop.fs.s3a.endpoint=s3.minio:9000 \
+              --conf spark.hadoop.fs.s3a.path.style.access=true \
+              {{inputs.parameters.main-app-file}} \
+              --input {{inputs.parameters.input-path}} \
+              --output {{inputs.parameters.output-path}} \
+            && echo "SUCCESS" > /tmp/job_status.txt \
+            || echo "FAILED" > /tmp/job_status.txt
+      retryStrategy:
+        limit: 2
+        retryPolicy: "Always"

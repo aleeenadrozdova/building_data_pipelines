@@ -1,0 +1,4 @@
+frac	full_rewrite_s	updates_write_s	merge_read_s
+   1%	1.214	0.294	0.507
+   5%	0.499	0.232	0.287
+  20%	0.466	0.240	0.244

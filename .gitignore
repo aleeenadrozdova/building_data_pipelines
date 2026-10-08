@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+
+# JVM / Maven / Scala
+target/
+*.class
+.idea/
+*.iml
+.bsp/
+.bloop/
+.metals/
+.vscode/
+
+# каталоги данных/результатов бенчмарк-прогонов (генерируются скриптами по RUN_ME)
+hw3/data_small/
+hw5/data_*/
+hw6/data*/
+hw7/data/

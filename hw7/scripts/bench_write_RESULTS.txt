@@ -1,0 +1,5 @@
+frac_pct	format	rows	size_MB	time_s
+10	delta	300000	79.69	10.79
+20	delta	600000	88.07	5.09
+50	delta	1500000	109.01	3.55
+100	delta	3000000	150.98	3.31

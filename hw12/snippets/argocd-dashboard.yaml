@@ -1,0 +1,21 @@
+# hw12 — ArgoCD Application: реакт-витрина (внутренний Helm-чарт + Kustomize-overlay среды).
+# ArgoCD смотрит git, применяет Helm-чарт charts/dashboard через Kustomize-оверлей prod.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dashboard
+  namespace: argocd
+spec:
+  project: retailflow
+  source:
+    repoURL: https://gitlab.example.com/retailflow/retailflow.git
+    path: deploy/kustomize/overlays/prod    # оверлей: подставляет image-tag/секреты среды
+    targetRevision: main
+    kustomize: {}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dashboards
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

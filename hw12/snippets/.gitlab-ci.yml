@@ -1,0 +1,42 @@
+# hw12 — фрагмент GitLab CI: сборка Spark-образа и генерация Argo Workflow-файла.
+# Полный пайплайн: lint/test -> build -> scan (Trivy) -> push (Harbor) -> gen workflow -> commit
+stages:
+  - test
+  - build
+  - scan
+  - push
+  - gen-manifests
+
+variables:
+  HARBOR: "harbor.example.com/retailflow"
+  SPARK_IMAGE: "$HARBOR/spark-jobs"
+
+# 1) тесты
+spark-tests:
+  stage: test
+  image: python:3.11
+  script:
+    - pip install pytest pyspark
+    - pytest apps/spark-jobs/tests -q
+
+# 2) сборка Docker-образа Spark-приложения
+build-spark:
+  stage: build
+  image: docker:24
+  services: ["docker:24-dind"]
+  script:
+    - docker build -t $SPARK_IMAGE:$CI_COMMIT_SHA apps/spark-jobs
+    # тег-версии (если релиз) + sha как уникальный immutable-идентификатор
+    - docker tag $SPARK_IMAGE:$CI_COMMIT_SHA $SPARK_IMAGE:$CI_COMMIT_REF_SLUG
+    - docker push $SPARK_IMAGE:$CI_COMMIT_SHA
+
+# 3) generate Argo Workflow, ссылающийся на universal шаблон spark-job + этот образ
+gen-workflow:
+  stage: gen-manifests
+  image: python:3.11
+  script:
+    - python workflows/gen_nightly.py --date "$(date +%F)" --image-tag "$CI_COMMIT_SHA"
+    - git add workflows/nightly && git commit -m "chore(workflows): nightly for $CI_COMMIT_SHA" || true
+    - git push origin HEAD:main
+  only:
+    - main

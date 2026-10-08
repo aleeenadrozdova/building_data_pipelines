@@ -1,0 +1,4 @@
+variant	time_s
+naive	0.747
+broadcast_hint	0.318
+aqe_on	0.384

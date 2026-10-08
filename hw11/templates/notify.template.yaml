@@ -1,0 +1,51 @@
+# WorkflowTemplate: уведомление (telegram/slack/webhook) — частая задача.
+# Универсальный: параметры — куда и что слать; возвращает статус отправки.
+#
+# Inputs.parameters:
+#   channel   — канал: telegram | slack | webhook
+#   message   — текст уведомления
+#   severity  — info | warning | critical (влияет на оформление/icon)
+#
+# Outputs:
+#   parameters.notify-status — sent / failed
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: notify
+  labels:
+    retailflow: reusable
+spec:
+  templates:
+    - name: notify
+      inputs:
+        parameters:
+          - name: channel
+            default: "telegram"
+          - name: message
+          - name: severity
+            default: "info"
+      outputs:
+        parameters:
+          - name: notify-status
+            valueFrom:
+              path: /tmp/notify_status.txt
+      script:
+        image: retailflow/notifier:0.9.0
+        command: ["python"]
+        source: |
+          import os, pathlib, urllib.request, json
+          channel = "{{inputs.parameters.channel}}"
+          message = "{{inputs.parameters.message}}"
+
+          webhook = os.environ.get("NOTIFY_WEBHOOK", "")
+          payload = {"text": message,
+                     "severity": "{{inputs.parameters.severity}}",
+                     "level": "{{inputs.parameters.severity}}"}
+          try:
+              req = urllib.request.Request(webhook,
+                                           data=json.dumps(payload).encode(),
+                                           headers={"Content-Type": "application/json"})
+              urllib.request.urlopen(req, timeout=10)
+              pathlib.Path("/tmp/notify_status.txt").write_text("sent")
+          except Exception as e:
+              pathlib.Path("/tmp/notify_status.txt").write_text(f"failed: {e}")

@@ -1,0 +1,5 @@
+format	size_MB	time_s
+parquet	3902.49	52.31
+avro	4692.7	32.67
+csv	12171.95	61.49
+json	29472.2	28.61
